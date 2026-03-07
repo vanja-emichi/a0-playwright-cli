@@ -394,11 +394,17 @@ class PlaywrightCliBackend:
             # Build LLM prompt with snapshot + history
             prompt = self._build_prompt(task, truncated, history)
 
-            # Call browser LLM
+            # Call browser LLM — SystemMessage carries browser_agent.system.md instructions;
+            # HumanMessage carries situational context (task + snapshot + history)
             try:
-                from langchain_core.messages import HumanMessage
+                from langchain_core.messages import HumanMessage, SystemMessage
                 llm = self.agent.llm
-                response = await llm.ainvoke([HumanMessage(content=prompt)])
+                system_text = self._load_system_prompt()
+                messages = []
+                if system_text:
+                    messages.append(SystemMessage(content=system_text))
+                messages.append(HumanMessage(content=prompt))
+                response = await llm.ainvoke(messages)
                 decision = self._parse_decision(response.content)
             except Exception as e:
                 log.warning("PlaywrightCliBackend: LLM call failed at step %d: %s", step, e)
@@ -490,27 +496,74 @@ class PlaywrightCliBackend:
                 return
             await self._run_cmd([f"-s={sid}", "fill", ref, value])
 
+        elif action == "dblclick":
+            if not ref or not _REF_PATTERN.match(str(ref)):
+                log.warning("PlaywrightCliBackend: dblclick rejected invalid ref '%s'", ref)
+                return
+            await self._run_cmd([f"-s={sid}", "dblclick", ref])
+
         elif action == "type":
-            await self._run_cmd([f"-s={sid}", "type", value])
+            await self._run_cmd([f"-s={sid}", "type", str(value)])
+
+        elif action == "press":
+            if not value:
+                log.warning("PlaywrightCliBackend: press action missing value")
+                return
+            await self._run_cmd([f"-s={sid}", "press", str(value)])
+
+        elif action == "select":
+            if not ref or not _REF_PATTERN.match(str(ref)):
+                log.warning("PlaywrightCliBackend: select rejected invalid ref '%s'", ref)
+                return
+            await self._run_cmd([f"-s={sid}", "select", ref, str(value)])
+
+        elif action == "check":
+            if not ref or not _REF_PATTERN.match(str(ref)):
+                log.warning("PlaywrightCliBackend: check rejected invalid ref '%s'", ref)
+                return
+            await self._run_cmd([f"-s={sid}", "check", ref])
+
+        elif action == "uncheck":
+            if not ref or not _REF_PATTERN.match(str(ref)):
+                log.warning("PlaywrightCliBackend: uncheck rejected invalid ref '%s'", ref)
+                return
+            await self._run_cmd([f"-s={sid}", "uncheck", ref])
+
+        elif action == "hover":
+            if not ref or not _REF_PATTERN.match(str(ref)):
+                log.warning("PlaywrightCliBackend: hover rejected invalid ref '%s'", ref)
+                return
+            await self._run_cmd([f"-s={sid}", "hover", ref])
+
+        elif action == "go-back":
+            await self._run_cmd([f"-s={sid}", "go-back"])
+
+        elif action == "go-forward":
+            await self._run_cmd([f"-s={sid}", "go-forward"])
+
+        elif action == "reload":
+            await self._run_cmd([f"-s={sid}", "reload"])
 
         elif action == "snapshot":
             # Explicit snapshot request — loop will call _get_snapshot on next iteration
             pass
 
         elif action == "tab-new":
-            await self._run_cmd([f"-s={sid}", "tab-new"])
+            if value and any(str(value).startswith(s) for s in _URL_ALLOWED_SCHEMES):
+                await self._run_cmd([f"-s={sid}", "tab-new", str(value)])
+            else:
+                await self._run_cmd([f"-s={sid}", "tab-new"])
 
         elif action == "tab-close":
             await self._run_cmd([f"-s={sid}", "tab-close"])
 
         elif action == "screenshot":
-            path = os.path.join(tempfile.gettempdir(), f"pw-shot-{sid}.png")
-            await self._run_cmd([f"-s={sid}", "screenshot", f"--filename={path}"])
-            log.info("PlaywrightCliBackend: screenshot saved to %s", path)
-            # Schedule cleanup — screenshot served to caller, then removed
+            snap_path = os.path.join(tempfile.gettempdir(), f"pw-shot-{sid}.png")
+            await self._run_cmd([f"-s={sid}", "screenshot", f"--filename={snap_path}"])
+            log.info("PlaywrightCliBackend: screenshot saved to %s", snap_path)
             try:
-                if os.path.exists(path):
-                    os.unlink(path)
+                if os.path.exists(snap_path):
+                    os.unlink(snap_path)
             except Exception:
                 pass
 
@@ -519,8 +572,27 @@ class PlaywrightCliBackend:
 
     # ── Prompt builder ────────────────────────────────────────────────────────
 
+    def _load_system_prompt(self) -> str:
+        """Load browser_agent.system.md from plugin prompts directory.
+
+        Returns empty string if file not found (fallback: human-only message).
+        Loaded fresh on each call — no caching — so hot-reload and agent-profile
+        overrides work without restarting Agent Zero.
+        """
+        path = os.path.join(_PLUGIN_ROOT, "prompts", "browser_agent.system.md")
+        try:
+            return open(path, encoding="utf-8").read()
+        except Exception as e:
+            log.warning(
+                "PlaywrightCliBackend: could not load system prompt from '%s': %s", path, e
+            )
+            return ""
+
     def _build_prompt(self, task: str, snapshot: dict, history: list) -> str:
-        """Build LLM prompt with task, current snapshot, and action history.
+        """Build human-turn LLM message: task + current snapshot + recent action history.
+
+        System instructions are loaded separately from browser_agent.system.md
+        and passed as a SystemMessage. This method carries only situational context.
 
         Security note: task string comes from the parent agent after secrets masking.
         It is embedded directly in the prompt — inherent prompt injection relay risk.
@@ -529,26 +601,17 @@ class PlaywrightCliBackend:
         # Safe serialization — snapshot already truncated at dict level
         snap_json = json.dumps(snapshot, indent=2)
         # Cap total snapshot bytes to prevent LLM context overflow
-        # (deeply nested structures or long attribute values can exceed cap even after element truncation)
+        # (deeply nested structures or long attribute values can exceed cap after element truncation)
         if len(snap_json) > self.SNAPSHOT_MAX_BYTES:
             snap_json = snap_json[: self.SNAPSHOT_MAX_BYTES] + "\n... (snapshot truncated at byte limit)"
         # Only last 5 history entries to avoid prompt bloat
         hist_json = json.dumps(history[-5:], indent=2)
         return (
-            f"You are controlling a browser to complete this task: {task}\n\n"
-            f"Current page snapshot (use element refs e1, e2, ... as action targets):\n"
+            f"## Current Task\n{task}\n\n"
+            f"## Page Snapshot\n"
+            f"(Use element refs e1, e2, ... as targets for click/fill/hover/etc.)\n"
             f"{snap_json}\n\n"
-            f"Action history (last 5 steps):\n"
+            f"## Action History (last 5 steps)\n"
             f"{hist_json}\n\n"
-            "Respond with JSON only (no text outside the JSON block):\n"
-            '{"action": "goto|click|fill|type|done", '
-            '"ref": "e1 (for click/fill, omit otherwise)", '
-            '"value": "URL or text or final answer", '
-            '"reasoning": "why this action", '
-            '"done": false}\n\n'
-            "Rules:\n"
-            "- Use ref values (e1, e2, etc.) from the snapshot for click/fill targets\n"
-            "- For goto, provide full URL starting with http:// or https://\n"
-            "- When the task is complete, set done=true and put the result in value\n"
-            "- If an action errored (see _error in history), try a different approach"
+            "Respond with a single JSON object — no prose, no markdown fences."
         )
