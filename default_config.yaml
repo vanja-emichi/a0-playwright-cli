@@ -1,4 +1,2 @@
-browser_http_headers: {}
-browser_model_extra_params: {}
-browser_backend: "playwright_cli"
-migrated: false
+# Playwright CLI Plugin — no custom config needed.
+# Uses Agent Zero built-in Browser Model settings (Settings > Agent > Browser Model).

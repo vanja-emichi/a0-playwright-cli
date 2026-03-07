@@ -14,7 +14,7 @@ from helpers import plugins
 
 log = logging.getLogger(__name__)
 
-_PLUGIN_NAME = "a0_playwright_cli"
+_PLUGIN_NAME = "playwright_cli"
 _PLAYWRIGHT_CLI_BACKEND = "playwright_cli"
 
 
@@ -40,7 +40,7 @@ class PlaywrightCliSkillPrompt(Extension):
         _p = os.path.abspath(__file__)
         for _ in range(6):
             _p = os.path.dirname(_p)
-        skill_md_path = os.path.join(_p, "plugins", "a0_playwright_cli", "skills", "playwright-cli", "SKILL.md")
+        skill_md_path = os.path.join(_p, "plugins", "playwright_cli", "skills", "playwright-cli", "SKILL.md")
 
         if not os.path.isfile(skill_md_path):
             log.warning(

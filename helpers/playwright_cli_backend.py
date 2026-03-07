@@ -396,9 +396,14 @@ class PlaywrightCliBackend:
 
             # Call browser LLM — SystemMessage carries browser_agent.system.md instructions;
             # HumanMessage carries situational context (task + snapshot + history)
+            # Uses agent.get_browser_model() (Settings > Agent > Browser Model);
+            # falls back to agent.llm if browser model is not configured.
             try:
                 from langchain_core.messages import HumanMessage, SystemMessage
-                llm = self.agent.llm
+                try:
+                    llm = self.agent.get_browser_model()
+                except Exception:
+                    llm = self.agent.llm
                 system_text = self._load_system_prompt()
                 messages = []
                 if system_text:

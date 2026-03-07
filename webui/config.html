@@ -1,72 +1,26 @@
 <html>
-<head><title>Browser</title></head>
+<head><title>Playwright CLI</title></head>
 <body>
-  <div x-data="{
-    headersError: '',
-    extraParamsError: '',
-    get headersJson() {
-      const v = $store.pluginSettings.settings.browser_http_headers;
-      return (v && typeof v === 'object') ? JSON.stringify(v, null, 2) : (v || '{}');
-    },
-    set headersJson(val) {
-      try { $store.pluginSettings.settings.browser_http_headers = JSON.parse(val); this.headersError = ''; }
-      catch(e) { this.headersError = 'Invalid JSON \u2014 changes not saved'; }
-    },
-    get extraParamsJson() {
-      const v = $store.pluginSettings.settings.browser_model_extra_params;
-      return (v && typeof v === 'object') ? JSON.stringify(v, null, 2) : (v || '{}');
-    },
-    set extraParamsJson(val) {
-      try { $store.pluginSettings.settings.browser_model_extra_params = JSON.parse(val); this.extraParamsError = ''; }
-      catch(e) { this.extraParamsError = 'Invalid JSON \u2014 changes not saved'; }
-    }
-  }">
-    <template x-if="$store.pluginSettings.settings">
+  <div>
+    <template x-if="true">
       <div>
         <div class="section">
-          <div class="section-title">Browser Plugin Settings</div>
+          <div class="section-title">Playwright CLI Plugin</div>
           <div class="section-description">
-            Configure browser automation backend and advanced options.
+            This plugin uses Agent Zero&#39;s built-in <strong>Browser Model</strong> settings.<br/>
+            Configure the browser LLM provider, model name, and parameters under
+            <strong>Settings &#8594; Agent &#8594; Browser Model</strong>.
           </div>
-
           <div class="field">
             <div class="field-label">
-              <div class="field-title">Browser Backend</div>
-              <div class="field-description">Playwright CLI (Microsoft) backend — structured DOM snapshots with stable element references (e1, e2...), mobile emulation, network mocking, and DevTools tracing.</div>
-            </div>
-            <div class="field-control">
-              <select x-model="$store.pluginSettings.settings.browser_backend">
-                <option value="playwright_cli">Playwright CLI (Microsoft)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <div class="field-label">
-              <div class="field-title">Browser HTTP Headers</div>
-              <div class="field-description">Custom HTTP headers injected into browser requests. Enter as JSON object, e.g. <code>{"Authorization": "Bearer token"}</code></div>
-            </div>
-            <div class="field-control">
-              <textarea rows="4" x-model="headersJson"
-                placeholder='{"Authorization": "Bearer token123"}'
-                style="width:100%;font-family:monospace;font-size:0.85rem;"></textarea>
-              <div x-show="headersError" x-text="headersError" style="color:#e05252;font-size:0.8rem;margin-top:4px;"></div>
+              <div class="field-title">Status</div>
+              <div class="field-description">
+                Playwright CLI is active. The <code>browser_agent</code> tool is available to all agents.<br/>
+                If Playwright CLI or Chromium are not yet installed, use the
+                <strong>Initialize</strong> button (plugin list page) to install them automatically.
+              </div>
             </div>
           </div>
-
-          <div class="field">
-            <div class="field-label">
-              <div class="field-title">Browser Model Extra Params</div>
-              <div class="field-description">Additional LLM parameters passed to the browser model. Enter as JSON object, e.g. <code>{"temperature": 0.1}</code></div>
-            </div>
-            <div class="field-control">
-              <textarea rows="4" x-model="extraParamsJson"
-                placeholder='{"temperature": 0.1, "max_tokens": 4096}'
-                style="width:100%;font-family:monospace;font-size:0.85rem;"></textarea>
-              <div x-show="extraParamsError" x-text="extraParamsError" style="color:#e05252;font-size:0.8rem;margin-top:4px;"></div>
-            </div>
-          </div>
-
         </div>
       </div>
     </template>

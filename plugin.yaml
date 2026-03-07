@@ -1,8 +1,8 @@
-name: a0_playwright_cli
-title: Browser
-description: AI-powered browser automation using Playwright CLI exclusively. Gives agents a browser_agent tool to navigate, interact with, and extract data from websites.
-version: 2.0.0
-note: "Required for browser automation. Install Playwright via pip install playwright && playwright install chromium. "
+name: playwright_cli
+title: Playwright CLI
+description: Microsoft Playwright CLI browser automation for Agent Zero. Gives agents a browser_agent tool to navigate, interact with, and extract data from websites using structured DOM snapshots with stable element references.
+version: 1.0.0
+note: "Requires Node.js. Enable the plugin and click Initialize to install playwright-cli and Chromium automatically."
 settings_sections:
   - agent
 per_project_config: false
